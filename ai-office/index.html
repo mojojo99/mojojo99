@@ -1,0 +1,1301 @@
+<title>AI Office HQ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sora:wght@500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one-screen studio — live 3D office floor (left) + agent desk panel (right); stacks on phones. */
+:root {
+  --bg: #eef0ed;
+  --surface: #ffffff;
+  --surface-2: #f4f6f3;
+  --fg: #19221e;
+  --muted: #5b6862;
+  --line: #d8ddd8;
+  --accent: #1d6a5a;
+  --accent-soft: #dcebe6;
+  --accent-fg: #ffffff;
+  --working: #b8740c;
+  --working-soft: #fbefd9;
+  --done: #2c7a4b;
+  --danger: #b3261e;
+  --shadow: 0 1px 2px rgba(20,30,25,.06), 0 8px 24px rgba(20,30,25,.08);
+  --font-display: "Sora", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111513; --surface: #181e1b; --surface-2: #1f2723; --fg: #e5ebe8; --muted: #9aa7a1;
+    --line: #2d3732; --accent: #63b9a4; --accent-soft: #1d3a33; --accent-fg: #0c1512;
+    --working: #e3a446; --working-soft: #3a2c14; --done: #6cc28f; --danger: #f08a80;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111513; --surface: #181e1b; --surface-2: #1f2723; --fg: #e5ebe8; --muted: #9aa7a1;
+  --line: #2d3732; --accent: #63b9a4; --accent-soft: #1d3a33; --accent-fg: #0c1512;
+  --working: #e3a446; --working-soft: #3a2c14; --done: #6cc28f; --danger: #f08a80;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.5; }
+* { box-sizing: border-box; }
+h1, h2, h3, h4 { font-family: var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.topbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.brand h1 { font-size: 20px; font-weight: 700; }
+.brand span { color: var(--muted); font-size: 13px; }
+.save-state { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.save-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--done); display: inline-block; }
+.save-state.local i { background: var(--working); }
+
+/* Stage */
+.stage { position: relative; min-width: 0; min-height: 0; border-radius: 14px; overflow: hidden; background: #cfd6d2; box-shadow: var(--shadow); }
+.stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.tag {
+  position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  padding: 3px 9px 3px 7px; border-radius: 999px; border: 1px solid rgba(0,0,0,.08);
+  background: rgba(255,255,255,.92); color: #19221e; font-size: 12px; font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,.12); transform: translate(-50%, -100%);
+  transition: background .2s;
+}
+.tag small { font-weight: 500; color: #5b6862; }
+.tag .dot { width: 8px; height: 8px; border-radius: 50%; background: #9aa7a1; }
+.tag.working .dot { background: #e39a1f; box-shadow: 0 0 0 3px rgba(227,154,31,.3); }
+.tag.selected { background: #19221e; color: #fff; }
+.tag.selected small { color: #c8d2cd; }
+.hint {
+  position: absolute; top: 12px; left: 12px; font-size: 12px; color: #19221e;
+  background: rgba(255,255,255,.85); padding: 4px 10px; border-radius: 8px; pointer-events: none;
+}
+.daybar {
+  position: absolute; left: 12px; right: 12px; bottom: 12px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.94); color: #19221e;
+  box-shadow: 0 4px 18px rgba(0,0,0,.14);
+}
+.daybar .clock { font-family: var(--font-mono); font-size: 22px; font-variant-numeric: tabular-nums; min-width: 72px; }
+.daybar .range { flex: 1 1 180px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.daybar input[type=range] { width: 100%; accent-color: #1d6a5a; }
+.daybar .ticks { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10px; color: #5b6862; }
+.daybar select { border: 1px solid #d8ddd8; border-radius: 8px; padding: 6px 8px; background: #fff; color: #19221e; }
+.play {
+  display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 10px; cursor: pointer;
+  padding: 9px 14px; background: #1d6a5a; color: #fff; font-weight: 600;
+}
+.play svg { width: 14px; height: 14px; fill: currentColor; }
+.load-msg { position: absolute; inset: 0; display: grid; place-items: center; color: #19221e; font-size: 14px; text-align: center; padding: 24px; }
+
+/* Panel */
+.panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+.panel-head { padding: 16px 18px 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 18px 20px; display: flex; flex-direction: column; gap: 18px; }
+.row { display: flex; align-items: center; gap: 10px; }
+.between { justify-content: space-between; }
+.eyebrow { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.back { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; font-weight: 600; font-size: 13px; }
+.avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-family: var(--font-display); font-weight: 600; flex: none; }
+.avatar.lg { width: 52px; height: 52px; font-size: 18px; }
+.who { min-width: 0; }
+.who h2 { font-size: 18px; }
+.who p { margin: 0; color: var(--muted); font-size: 13px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.pill.working { background: var(--working-soft); color: var(--working); }
+.pill.real { background: var(--accent-soft); color: var(--accent); }
+.tabs { display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: 10px; }
+.tabs button { flex: 1; border: 0; background: none; padding: 7px 8px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.section { display: flex; flex-direction: column; gap: 8px; }
+.section h3 { font-size: 13px; font-weight: 600; font-family: var(--font-body); letter-spacing: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+p { margin: 0; }
+ul.plain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+ul.ticks li { padding-left: 18px; position: relative; }
+ul.ticks li::before { content: ""; position: absolute; left: 3px; top: .55em; width: 6px; height: 6px; border-radius: 2px; background: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); }
+.times { display: flex; flex-wrap: wrap; gap: 6px; }
+.time { font-family: var(--font-mono); font-size: 12px; padding: 4px 8px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.time.past { color: var(--muted); text-decoration: line-through; }
+.time.next { border-color: var(--accent); color: var(--accent); }
+
+.roster { display: flex; flex-direction: column; gap: 2px; }
+.roster button {
+  display: grid; grid-template-columns: 36px minmax(0,1fr) auto; align-items: center; gap: 10px; text-align: left;
+  border: 0; background: none; padding: 8px; border-radius: 10px; cursor: pointer;
+}
+.roster button:hover { background: var(--surface-2); }
+.roster .avatar { width: 36px; height: 36px; font-size: 13px; }
+.roster strong { display: block; font-weight: 600; }
+.roster span { display: block; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roster .when { font-family: var(--font-mono); font-size: 12px; color: var(--muted); text-align: right; }
+
+.log { display: flex; flex-direction: column; gap: 0; }
+.log-item { display: grid; grid-template-columns: 46px minmax(0,1fr); gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+.log-item:first-child { border-top: 0; }
+.log-item time { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
+.log-item b { font-weight: 600; }
+.sim { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+.empty { padding: 14px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 13px; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; padding: 9px 14px; font-weight: 600; cursor: pointer; border: 1px solid var(--line); background: var(--surface); }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.danger { color: var(--danger); }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+form.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+form.grid .full { grid-column: 1 / -1; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.field input, .field select, .field textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface-2);
+}
+.field textarea { resize: vertical; min-height: 64px; }
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.swatches button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
+.swatches button[aria-pressed="true"] { border-color: var(--fg); }
+.notice { font-size: 12px; color: var(--muted); background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+.confirm { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 10px; background: var(--surface-2); }
+
+/* Chat */
+.chat { display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 92%; padding: 9px 12px; border-radius: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.me { align-self: flex-end; background: var(--accent); color: var(--accent-fg); border-bottom-right-radius: 4px; }
+.msg.ai { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
+.composer { display: flex; gap: 8px; }
+.composer textarea { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; background: var(--surface-2); resize: none; height: 44px; }
+.suggest { display: flex; flex-wrap: wrap; gap: 6px; }
+.suggest button { font-size: 12px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+
+/* Outline output */
+.doc { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--surface-2); overflow-wrap: anywhere; min-width: 0; }
+.doc h1 { font-size: 20px; margin: 0 0 8px; }
+.doc h2 { font-size: 15px; margin: 18px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.doc h3 { font-size: 14px; margin: 12px 0 4px; font-family: var(--font-body); font-weight: 600; }
+.doc h4 { font-size: 13px; margin: 10px 0 4px; font-family: var(--font-body); }
+.doc p { margin: 6px 0; }
+.doc ul, .doc ol { margin: 4px 0; padding-left: 20px; }
+.doc li { margin: 2px 0; }
+.doc ul ul { margin: 2px 0; }
+.doc hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+.doc code { font-family: var(--font-mono); font-size: 12px; }
+.doc .tbl { overflow-x: auto; }
+.doc table { border-collapse: collapse; font-size: 12px; }
+.doc td, .doc th { border: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+.library button.item { display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left; border: 0; background: none; padding: 8px; border-radius: 8px; cursor: pointer; }
+.library button.item:hover { background: var(--surface-2); }
+.library .item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 8px 14px; border-radius: 10px; font-size: 13px; z-index: 20; }
+
+@media (max-width: 900px) {
+  html, body { height: auto; }
+  .app { height: auto; grid-template-columns: minmax(0,1fr); grid-template-rows: auto; }
+  .stage { height: 62vh; min-height: 380px; }
+  .panel { overflow: visible; }
+  .panel-body { overflow: visible; }
+  .daybar .clock { font-size: 18px; min-width: 56px; }
+  form.grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>AI Office HQ</h1>
+      <span>Your team of AI agents for the daily routine</span>
+    </div>
+    <span class="save-state" id="save-state"><i></i><span>Loading your office…</span></span>
+  </header>
+
+  <section class="stage" id="stage" aria-label="3D office floor">
+    <div class="load-msg" id="load-msg">Setting up the office…</div>
+    <div class="labels" id="labels"></div>
+    <div class="hint" id="hint">Drag to look around · scroll to zoom · click an agent</div>
+    <div class="daybar">
+      <button class="play" id="play" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg><span>Run my day</span></button>
+      <div class="clock" id="clock" aria-live="polite">07:00</div>
+      <div class="range">
+        <input type="range" id="scrub" min="420" max="1140" step="5" value="420" aria-label="Time of day">
+        <div class="ticks"><span>07:00</span><span>10:00</span><span>13:00</span><span>16:00</span><span>19:00</span></div>
+      </div>
+      <select id="speed" aria-label="Simulation speed">
+        <option value="6">Slow</option>
+        <option value="12" selected>Normal</option>
+        <option value="30">Fast</option>
+      </select>
+    </div>
+  </section>
+
+  <aside class="panel" id="panel" aria-live="polite"></aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+"use strict";
+
+/* ---------------- Data ---------------- */
+const DAY_START = 420, DAY_END = 1140, WORK_MIN = 25;
+const RM = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const COLORS = ["#2f6db5", "#1d6a5a", "#b8562f", "#7a4fa3", "#c0901c", "#3b8f9e", "#a8325e", "#4f6b2f", "#5a5f6b"];
+const SKINS = ["#f1c9a5", "#c68e63", "#8d5a3b", "#e8b48f", "#5c3a24", "#d9a07a"];
+const HAIRS = ["#2a1c14", "#5b3a1e", "#111111", "#a0662f", "#3a2a22", "#d8c08a"];
+
+const KINDS = {
+  inbox: {
+    label: "Inbox & email", tools: ["Gmail", "Outlook"],
+    results: [
+      "Triaged 47 new emails: 4 urgent, 11 need a reply, 32 archived.",
+      "Drafted 6 replies for your review and flagged an invoice question from a client.",
+      "Inbox down to 9 low-priority emails. Suggested 3 newsletters to unsubscribe from."
+    ]
+  },
+  calendar: {
+    label: "Calendar & meetings", tools: ["Google Calendar", "Zoom", "TwinMind"],
+    results: [
+      "Morning briefing: 4 meetings today, first at 09:30. Protected a 45-minute focus block at 14:00.",
+      "Prepared the 10:00 client call: last meeting summary, open actions and 3 talking points.",
+      "Meeting recap: captured 7 action items from today's calls and passed them to the task desk."
+    ]
+  },
+  tasks: {
+    label: "Tasks & to-dos", tools: ["Task list", "Gmail", "TwinMind"],
+    results: [
+      "Today's top 3: finish the client proposal, review the training deck, reply to the venue.",
+      "Midday check: 5 of 9 tasks done. Moved 2 low-priority items to Thursday.",
+      "End-of-day wrap: 8 tasks closed, 3 carried over, tomorrow's plan drafted."
+    ]
+  },
+  research: {
+    label: "Research & news", tools: ["Web search", "Google Drive"],
+    results: [
+      "Morning briefing: 5 stories on L&D trends, AI at work and your clients' industries.",
+      "Deep-dive ready: a one-page summary on microlearning adoption in APAC companies."
+    ]
+  },
+  training: {
+    label: "Training outlines", tools: ["AI writing", "Google Drive"],
+    results: [
+      "Pipeline check: 2 client briefs are waiting. Open my desk to write their outlines.",
+      "Reviewed this week's outline drafts. They're ready for your edits."
+    ]
+  },
+  custom: { label: "Custom role", tools: [], results: [] }
+};
+
+const DEFAULT_AGENTS = [
+  { id: "a-ava", name: "Ava", role: "Inbox Manager", kind: "inbox", color: COLORS[0], skin: SKINS[0], hair: HAIRS[0],
+    description: "Keeps your inbox under control so only what matters reaches you.",
+    responsibilities: ["Sort new email into urgent, reply and FYI", "Draft replies in your tone for review", "Flag client and invoice emails"],
+    tools: ["Gmail", "Outlook"], times: ["07:30", "12:30", "17:00"] },
+  { id: "a-marcus", name: "Marcus", role: "Calendar & Meetings Coordinator", kind: "calendar", color: COLORS[2], skin: SKINS[2], hair: HAIRS[2],
+    description: "Plans your day around your meetings and makes sure you walk into each one prepared.",
+    responsibilities: ["Morning schedule briefing", "Prep notes before client calls", "Meeting recaps with action items"],
+    tools: ["Google Calendar", "Zoom", "TwinMind"], times: ["07:00", "09:15", "16:30"] },
+  { id: "a-priya", name: "Priya", role: "Task Prioritiser", kind: "tasks", color: COLORS[3], skin: SKINS[1], hair: HAIRS[1],
+    description: "Turns everything on your plate into a clear, ordered plan for the day.",
+    responsibilities: ["Collect action items from email and meetings", "Pick today's top 3", "End-of-day wrap and tomorrow's plan"],
+    tools: ["Task list", "Gmail", "TwinMind"], times: ["07:15", "13:00", "18:00"] },
+  { id: "a-kenji", name: "Kenji", role: "Research Analyst", kind: "research", color: COLORS[5], skin: SKINS[3], hair: HAIRS[4],
+    description: "Reads the news and research you don't have time for and boils it down.",
+    responsibilities: ["Daily news briefing on your topics", "Background research on new clients", "One-page summaries on request"],
+    tools: ["Web search", "Google Drive"], times: ["07:45", "15:00"] },
+  { id: "a-leo", name: "Leo", role: "Training Designer", kind: "training", color: COLORS[1], skin: SKINS[5], hair: HAIRS[3],
+    description: "Designs training outlines for your corporate clients: modules, objectives and timing.",
+    responsibilities: ["Turn a client brief into a full training outline", "Write measurable learning objectives", "Plan module timing, activities and assessment"],
+    tools: ["AI writing", "Google Drive"], times: ["10:00", "15:30"] }
+];
+
+const SLOTS = [[-9,-4],[-4,-4],[1,-4],[-9,1.2],[-4,1.2],[1,1.2],[-9,6.4],[-4,6.4],[1,6.4]];
+
+let agents = [];
+let selectedId = null;
+let view = "overview";       // overview | agent | hire | edit
+let tab = "profile";          // profile | chat | outline
+let simMin = DAY_START;
+let playing = false;
+let fired = new Set();
+const log = [];
+const chats = {};
+const runtime = {};
+let outlineText = "", outlineBusy = false, outlineMeta = null, outlineCtrl = null;
+let library = [];
+let confirmRemove = false;
+
+/* ---------------- Helpers ---------------- */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const toMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t).trim()); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+const fmt = m => { m = Math.round(m); return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); };
+const initials = n => String(n || "?").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+const uid = () => "a-" + Math.random().toString(36).slice(2, 9);
+const byId = id => agents.find(a => a.id === id);
+function sortedTimes(a) { return (a.times || []).map(toMin).filter(v => v != null).sort((x, y) => x - y); }
+function nextRun(a) { return sortedTimes(a).find(t => t >= simMin); }
+function isWorking(a) { return sortedTimes(a).some(t => simMin >= t && simMin < t + WORK_MIN) && fired.has(a.id + "@" + sortedTimes(a).find(t => simMin >= t && simMin < t + WORK_MIN)); }
+function toast(msg) {
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2400);
+}
+
+/* ---------------- Persistence ---------------- */
+let db = null, officeRef = null, storeMode = "none", saveTimer = null;
+const LS_KEY = "ai-office-hq-v1";
+function setSaveState(text, local) {
+  const el = $("#save-state"); el.classList.toggle("local", !!local); el.querySelector("span").textContent = text;
+}
+function withTimeout(p, ms) { return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]); }
+async function loadState() {
+  let loaded = null;
+  try {
+    if (window.claude && claude.use) {
+      const [d, u] = await Promise.all([claude.use("db"), claude.use("user")]);
+      const id = u ? await u.id() : null;
+      if (d && id) {
+        db = d;
+        officeRef = d.doc("data/users/" + id + "/office");
+        const snap = await withTimeout(officeRef.get(), 10000);
+        storeMode = "db";
+        if (snap.exists && Array.isArray(snap.data().agents)) loaded = snap.data().agents;
+        loadLibrary();
+      }
+    }
+  } catch (e) { officeRef = null; storeMode = "none"; }
+  if (!loaded) {
+    try { const raw = localStorage.getItem(LS_KEY); if (raw && storeMode !== "db") { const p = JSON.parse(raw); if (Array.isArray(p.agents)) loaded = p.agents; } } catch (e) {}
+    if (storeMode !== "db") storeMode = "local";
+  }
+  agents = (loaded && loaded.length ? loaded : DEFAULT_AGENTS).map(a => ({ ...a }));
+  setSaveState(storeMode === "db" ? "Saved to your account" : "Saved in this browser only", storeMode !== "db");
+}
+function save() {
+  clearTimeout(saveTimer);
+  setSaveState("Saving…", storeMode !== "db");
+  saveTimer = setTimeout(async () => {
+    const data = { version: 1, agents, updatedAt: new Date().toISOString() };
+    if (storeMode === "db" && officeRef) {
+      try { await officeRef.set(data); setSaveState("Saved to your account", false); return; }
+      catch (e) { setSaveState("Couldn't save to your account. Saved in this browser.", true); }
+    }
+    try { localStorage.setItem(LS_KEY, JSON.stringify(data)); if (storeMode !== "db") setSaveState("Saved in this browser only", true); } catch (e) { setSaveState("Not saved: storage is blocked here", true); }
+  }, 500);
+}
+function outlinesCol() { return officeRef ? officeRef.collection("outlines") : null; }
+async function loadLibrary() {
+  const col = outlinesCol(); if (!col) return;
+  try {
+    const snap = await withTimeout(col.orderBy("createdAt", "desc").limit(20).get(), 10000);
+    library = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (view === "agent" && tab === "outline") renderPanel();
+  } catch (e) {}
+}
+
+/* ---------------- AI ---------------- */
+let samplePromise = null;
+function getSample() {
+  if (!samplePromise) samplePromise = (window.claude && claude.use) ? claude.use("sample").catch(() => null) : Promise.resolve(null);
+  return samplePromise;
+}
+function personaPrompt(a) {
+  return `You are ${a.name}, the ${a.role} in the user's "AI Office", a team of AI agents that help them run their daily routine. ` +
+    `The user runs a corporate training business. Your focus: ${a.description} ` +
+    `Your responsibilities: ${(a.responsibilities || []).join("; ")}. Tools you would normally use: ${(a.tools || []).join(", ") || "none listed"}. ` +
+    `Important: in this office you are not yet connected to the user's real accounts, so never claim to have read their email, calendar or files. ` +
+    `If a request needs their data, ask them to paste the relevant details, or explain exactly what you would do once connected. ` +
+    `Stay in role, be warm and practical, use short paragraphs or brief bullet lists, and keep replies under 220 words unless asked for more. Use plain text, not Markdown headings.`;
+}
+
+/* ---------------- Markdown (small, safe) ---------------- */
+function inline(s) {
+  return esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>");
+}
+function md(src) {
+  const lines = String(src || "").replace(/\r/g, "").split("\n");
+  let html = "", list = [], para = [];
+  const flushPara = () => { if (para.length) { html += "<p>" + inline(para.join(" ")) + "</p>"; para = []; } };
+  const closeLists = (depth = 0) => { while (list.length > depth) html += "</li></" + list.pop() + ">"; };
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i], line = raw.trimEnd();
+    if (!line.trim()) { flushPara(); continue; }
+    let m;
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      flushPara(); closeLists();
+      const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows.push(lines[i]); i++; }
+      i--;
+      const cells = r => r.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+      let t = '<div class="tbl"><table>';
+      rows.forEach((r, ri) => {
+        if (/^\s*\|[\s:|-]+\|\s*$/.test(r)) return;
+        const tag = ri === 0 ? "th" : "td";
+        t += "<tr>" + cells(r).map(c => `<${tag}>${inline(c)}</${tag}>`).join("") + "</tr>";
+      });
+      html += t + "</table></div>"; continue;
+    }
+    if ((m = /^(#{1,4})\s+(.*)$/.exec(line))) { flushPara(); closeLists(); const n = m[1].length; html += `<h${n}>${inline(m[2])}</h${n}>`; continue; }
+    if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) { flushPara(); closeLists(); html += "<hr>"; continue; }
+    if ((m = /^(\s*)([-*•]|\d+[.)])\s+(.*)$/.exec(line))) {
+      flushPara();
+      const depth = Math.min(3, Math.floor(m[1].replace(/\t/g, "  ").length / 2) + 1);
+      const type = /\d/.test(m[2]) ? "ol" : "ul";
+      if (list.length < depth) { while (list.length < depth) { html += "<" + type + "><li>"; list.push(type); } html += inline(m[3]); }
+      else { closeLists(depth); html += "</li><li>" + inline(m[3]); }
+      continue;
+    }
+    if (list.length && /^\s{2,}\S/.test(raw)) { html += " " + inline(line.trim()); continue; }
+    closeLists(); para.push(line.trim());
+  }
+  flushPara(); closeLists();
+  return html;
+}
+
+/* ---------------- Panel rendering ---------------- */
+const panel = $("#panel");
+function avatarHTML(a, cls = "") { return `<div class="avatar ${cls}" style="background:${esc(a.color)}" aria-hidden="true">${esc(initials(a.name))}</div>`; }
+function statusHTML(a) {
+  if (isWorking(a)) return `<span class="pill working">Working</span>`;
+  const n = nextRun(a);
+  return `<span class="pill">${n != null ? "Next " + fmt(n) : "Done for today"}</span>`;
+}
+
+function renderPanel() {
+  if (view === "overview") return renderOverview();
+  if (view === "hire") return renderForm(null);
+  if (view === "edit") return renderForm(byId(selectedId));
+  const a = byId(selectedId);
+  if (!a) { view = "overview"; return renderOverview(); }
+  renderAgent(a);
+}
+
+function renderOverview() {
+  const upcoming = agents
+    .flatMap(a => sortedTimes(a).filter(t => t >= simMin).map(t => ({ a, t })))
+    .sort((x, y) => x.t - y.t).slice(0, 5);
+  panel.innerHTML = `
+    <div class="panel-head">
+      <div class="row between"><span class="eyebrow">Office overview</span><span class="pill">${agents.length} agent${agents.length === 1 ? "" : "s"}</span></div>
+      <h2 style="font-size:18px">Your team today</h2>
+    </div>
+    <div class="panel-body">
+      <div class="section">
+        <div class="roster">
+          ${agents.map(a => `<button type="button" data-open="${esc(a.id)}">${avatarHTML(a)}<div style="min-width:0"><strong>${esc(a.name)}</strong><span>${esc(a.role)}</span></div><div class="when">${isWorking(a) ? '<span class="pill working">Working</span>' : (nextRun(a) != null ? fmt(nextRun(a)) : "Done")}</div></button>`).join("")}
+        </div>
+        <div class="btns"><button class="btn primary" type="button" id="hire-btn" ${agents.length >= SLOTS.length ? "disabled" : ""}>Hire an agent</button>
+        ${agents.length >= SLOTS.length ? '<span class="muted small">The office is full (9 desks).</span>' : ""}</div>
+      </div>
+      <div class="section">
+        <h3>Coming up</h3>
+        ${upcoming.length ? `<ul class="plain">${upcoming.map(u => `<li class="row"><span class="time">${fmt(u.t)}</span><span><b>${esc(u.a.name)}</b> <span class="muted">· ${esc(u.a.role)}</span></span></li>`).join("")}</ul>` : `<div class="empty">No more runs today. Drag the clock back to replay the day.</div>`}
+      </div>
+      <div class="section">
+        <h3>Activity</h3>
+        ${log.length ? `<div class="log">${log.slice().reverse().slice(0, 40).map(l => `<div class="log-item"><time>${fmt(l.t)}</time><div><b>${esc(l.name)}</b>${l.sim ? '<span class="sim">Simulated</span>' : ""}<br><span>${esc(l.text)}</span></div></div>`).join("")}</div>`
+          : `<div class="empty">Press <b>Run my day</b> to watch your team work through a simulated day. Each agent starts at its scheduled time and reports back here.</div>`}
+      </div>
+      <p class="notice">The office is a visual prototype. Agent runs are simulated. Leo's training outlines and every agent's chat are written live by AI.</p>
+    </div>`;
+}
+
+function renderAgent(a) {
+  const isTraining = a.kind === "training";
+  if (tab === "outline" && !isTraining) tab = "profile";
+  const tabs = [["profile", "Profile"], ["chat", "Chat"]].concat(isTraining ? [["outline", "Training outline"]] : []);
+  panel.innerHTML = `
+    <div class="panel-head">
+      <button class="back" type="button" id="back">← All agents</button>
+      <div class="row">${avatarHTML(a, "lg")}<div class="who"><h2>${esc(a.name)}</h2><p>${esc(a.role)}</p></div><div style="margin-left:auto">${statusHTML(a)}</div></div>
+      <div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${tab === k}">${l}</button>`).join("")}</div>
+    </div>
+    <div class="panel-body" id="tab-body"></div>`;
+  const body = $("#tab-body");
+  if (tab === "profile") body.innerHTML = profileHTML(a);
+  if (tab === "chat") renderChat(a, body);
+  if (tab === "outline") renderOutline(a, body);
+}
+
+function profileHTML(a) {
+  const ts = sortedTimes(a), n = nextRun(a);
+  return `
+    <div class="section"><p>${esc(a.description)}</p>${a.kind === "training" ? '<p><span class="pill real">Writes real outlines</span></p>' : ""}</div>
+    <div class="section"><h3>Responsibilities</h3><ul class="plain ticks">${(a.responsibilities || []).map(r => `<li>${esc(r)}</li>`).join("") || '<li class="muted">None yet</li>'}</ul></div>
+    <div class="section"><h3>Daily schedule</h3><div class="times">${ts.map(t => `<span class="time ${t + WORK_MIN <= simMin ? "past" : (t === n ? "next" : "")}">${fmt(t)}</span>`).join("") || '<span class="muted">On demand only</span>'}</div></div>
+    <div class="section"><h3>Tools</h3><div class="chips">${(a.tools || []).map(t => `<span class="chip">${esc(t)}</span>`).join("") || '<span class="muted">None listed</span>'}</div>
+      <p class="muted small">Tools show what this agent would connect to. They are not connected yet.</p></div>
+    <div class="section">
+      ${confirmRemove ? `<div class="confirm"><p>Remove ${esc(a.name)} from the office? Their desk and settings will be deleted.</p><div class="btns"><button class="btn danger" type="button" id="remove-yes">Remove ${esc(a.name)}</button><button class="btn" type="button" id="remove-no">Keep</button></div></div>`
+      : `<div class="btns"><button class="btn primary" type="button" id="edit-btn">Edit agent</button><button class="btn danger" type="button" id="remove-btn">Remove</button></div>`}
+    </div>`;
+}
+
+/* Chat */
+async function renderChat(a, body) {
+  const hist = chats[a.id] || (chats[a.id] = []);
+  const sample = await getSample();
+  const ideas = {
+    inbox: ["How would you sort my inbox each morning?", "Draft a polite reply declining a meeting"],
+    calendar: ["How should I structure a training-heavy week?", "Write a prep checklist for a client call"],
+    tasks: ["Help me pick my top 3 for today", "Turn these notes into tasks: …"],
+    research: ["What are the big L&D trends this year?", "Brief me on running hybrid workshops"],
+    training: ["What makes a strong learning objective?", "Suggest icebreakers for senior leaders"],
+    custom: ["What can you help me with?"]
+  }[a.kind] || ["What can you help me with?"];
+  body.innerHTML = `
+    <div class="chat" id="chat-log">
+      ${hist.length ? "" : `<div class="msg ai">Hi, I'm ${esc(a.name)}. ${esc(a.description)} What can I help with?</div>`}
+      ${hist.map(m => `<div class="msg ${m.role === "user" ? "me" : "ai"}">${esc(m.content)}</div>`).join("")}
+    </div>
+    ${sample ? `
+    <div class="suggest">${ideas.map(i => `<button type="button" data-suggest="${esc(i)}">${esc(i)}</button>`).join("")}</div>
+    <form class="composer" id="chat-form"><textarea id="chat-input" placeholder="Message ${esc(a.name)}…" aria-label="Message ${esc(a.name)}"></textarea><button class="btn primary" type="submit" id="chat-send">Send</button></form>`
+    : `<p class="notice">Chat uses AI from your Claude account. Open this page on claude.ai while signed in to talk to ${esc(a.name)}.</p>`}`;
+  const logEl = $("#chat-log"); logEl.lastElementChild && logEl.lastElementChild.scrollIntoView({ block: "nearest" });
+}
+async function sendChat(text) {
+  const a = byId(selectedId); if (!a || !text.trim()) return;
+  const sample = await getSample(); if (!sample) return;
+  const hist = chats[a.id] || (chats[a.id] = []);
+  hist.push({ role: "user", content: text.trim() });
+  renderPanel();
+  const logEl = $("#chat-log"); const bubble = document.createElement("div");
+  bubble.className = "msg ai"; bubble.textContent = "Thinking…"; logEl.appendChild(bubble); bubble.scrollIntoView({ block: "nearest" });
+  const send = $("#chat-send"); if (send) send.disabled = true;
+  const msgs = [{ role: "user", content: personaPrompt(a) + "\n\nReply to the conversation below as " + a.name + ".\n\n" + hist.map(m => (m.role === "user" ? "User: " : a.name + ": ") + m.content).join("\n\n") }];
+  try {
+    const res = await sample(msgs, { cache: false, onText: ({ text }) => { bubble.textContent = text; } });
+    hist.push({ role: "assistant", content: res.text });
+  } catch (e) {
+    const msg = e && e.code === "not_granted" ? "AI chat isn't allowed for this page. You can turn it on in the artifact's permissions." :
+      e && e.code === "rate_limited" ? "Too many requests right now. Wait a minute and try again." : "Something went wrong reaching AI. Try again.";
+    hist.pop(); bubble.textContent = msg;
+  }
+  if (view === "agent" && tab === "chat" && selectedId === a.id) renderPanel();
+}
+
+/* Training outline */
+const OUTLINE_EXAMPLE = {
+  client: "Northwind Logistics (example)", industry: "Logistics & supply chain",
+  topic: "Giving effective feedback for first-time managers", audience: "Newly promoted team leads",
+  size: "18", level: "Beginner", duration: "Full day (7 hours)", format: "In-person", start: "09:00",
+  goals: "Leads hold regular 1:1s, give specific feedback using a simple model, and handle one difficult conversation with confidence.",
+  notes: "Mixed cultural backgrounds. Include practice with realistic warehouse and office scenarios."
+};
+let outlineForm = { ...OUTLINE_EXAMPLE };
+async function renderOutline(a, body) {
+  const sample = await getSample();
+  const f = outlineForm;
+  const opt = (arr, v) => arr.map(o => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("");
+  body.innerHTML = `
+    <div class="section">
+      <p class="muted small">Fill in the client brief and ${esc(a.name)} writes a full outline: modules, objectives and timing. The form starts with an example brief.</p>
+      <form class="grid" id="outline-form">
+        <div class="field"><label for="o-client">Client</label><input id="o-client" name="client" value="${esc(f.client)}"></div>
+        <div class="field"><label for="o-industry">Industry</label><input id="o-industry" name="industry" value="${esc(f.industry)}"></div>
+        <div class="field full"><label for="o-topic">Training topic</label><input id="o-topic" name="topic" value="${esc(f.topic)}" required></div>
+        <div class="field"><label for="o-audience">Audience</label><input id="o-audience" name="audience" value="${esc(f.audience)}"></div>
+        <div class="field"><label for="o-size">Participants</label><input id="o-size" name="size" inputmode="numeric" value="${esc(f.size)}"></div>
+        <div class="field"><label for="o-level">Level</label><select id="o-level" name="level">${opt(["Beginner", "Intermediate", "Advanced", "Mixed"], f.level)}</select></div>
+        <div class="field"><label for="o-duration">Duration</label><select id="o-duration" name="duration">${opt(["90-minute session", "Half day (3.5 hours)", "Full day (7 hours)", "Two days (14 hours)"], f.duration)}</select></div>
+        <div class="field"><label for="o-format">Delivery</label><select id="o-format" name="format">${opt(["In-person", "Virtual (live online)", "Hybrid"], f.format)}</select></div>
+        <div class="field"><label for="o-start">Start time</label><input id="o-start" name="start" value="${esc(f.start)}"></div>
+        <div class="field full"><label for="o-goals">What should change after the training?</label><textarea id="o-goals" name="goals">${esc(f.goals)}</textarea></div>
+        <div class="field full"><label for="o-notes">Notes and constraints (optional)</label><textarea id="o-notes" name="notes">${esc(f.notes)}</textarea></div>
+        <div class="full btns">
+          ${sample ? `<button class="btn primary" type="submit" id="o-go" ${outlineBusy ? "disabled" : ""}>${outlineBusy ? "Writing…" : "Write outline"}</button>` : ""}
+          ${outlineBusy ? '<button class="btn" type="button" id="o-stop">Stop</button>' : ""}
+          <button class="btn" type="button" id="o-clear">Clear form</button>
+        </div>
+      </form>
+      ${sample ? "" : `<p class="notice">Outline writing uses AI from your Claude account. Open this page on claude.ai while signed in.</p>`}
+    </div>
+    <div class="section" id="o-result">
+      ${outlineText ? `<div class="row between"><h3>Outline</h3><div class="btns">
+        <button class="btn" type="button" id="o-copy" ${outlineBusy ? "disabled" : ""}>Copy</button>
+        <button class="btn" type="button" id="o-dl" ${outlineBusy ? "disabled" : ""}>Download .md</button>
+        ${outlinesCol() ? `<button class="btn" type="button" id="o-save" ${outlineBusy ? "disabled" : ""}>Save</button>` : ""}</div></div>
+        <div class="doc" id="o-doc">${md(outlineText)}</div>` : ""}
+    </div>
+    ${outlinesCol() ? `<div class="section library"><h3>Saved outlines</h3>
+      ${library.length ? library.map(o => `<button class="item" type="button" data-lib="${esc(o.id)}"><span><b>${esc(o.topic || "Untitled")}</b> <span class="muted">· ${esc(o.client || "")}</span></span><span class="muted small">${esc((o.createdAt || "").slice(0, 10))}</span></button>`).join("")
+        : '<div class="empty">Outlines you save appear here, so you can reopen them later.</div>'}</div>` : ""}`;
+}
+function readOutlineForm() {
+  const fd = new FormData($("#outline-form")); const o = {};
+  for (const [k, v] of fd.entries()) o[k] = String(v).trim();
+  outlineForm = o; return o;
+}
+function outlinePrompt(a, f) {
+  return `You are ${a.name}, a senior corporate training designer. Write a complete, ready-to-use training outline for this client brief.
+
+Client: ${f.client || "Not specified"}
+Industry: ${f.industry || "Not specified"}
+Topic: ${f.topic}
+Audience: ${f.audience || "Not specified"} (${f.size || "?"} participants, ${f.level} level)
+Duration: ${f.duration}
+Delivery: ${f.format}
+Start time: ${f.start || "09:00"}
+Desired change after training: ${f.goals || "Not specified"}
+Notes and constraints: ${f.notes || "None"}
+
+Use Markdown with exactly this structure:
+# <Course title>
+One line: client · audience · duration · delivery.
+## Learning objectives
+4 to 6 measurable objectives that start with an action verb ("By the end, participants will be able to…").
+## Agenda at a glance
+A bullet list with clock times from the start time, for example "- 09:00–09:30 · Module 1: Title". Include breaks and lunch where the duration calls for them, and make the times add up exactly to the duration.
+## Module 1: <title> (HH:MM–HH:MM, NN min)
+For each module: **Objective** (which objective it serves), **Key content** (3–5 bullets), **Activity** (a specific exercise tailored to the client's industry, with group size and timing), **Materials**.
+(Repeat for every module.)
+## Assessment and evaluation
+How learning is checked during the session, plus a follow-up plan using Kirkpatrick levels 1–3.
+## Pre-work and follow-up
+## Facilitator notes
+Practical tips for this audience, including risks and how to handle them.
+
+Rules: tailor examples to the industry and audience, keep timings realistic, no tables, no preamble before the title, no closing remarks after the facilitator notes.`;
+}
+async function generateOutline() {
+  const a = byId(selectedId); const sample = await getSample();
+  if (!a || !sample || outlineBusy) return;
+  const f = readOutlineForm();
+  if (!f.topic) { toast("Add a training topic first."); return; }
+  outlineBusy = true; outlineText = "Thinking…"; outlineMeta = { client: f.client, topic: f.topic, duration: f.duration };
+  outlineCtrl = new AbortController();
+  renderPanel();
+  try {
+    const res = await sample(outlinePrompt(a, f), {
+      modelTier: "complex", cache: false, signal: outlineCtrl.signal,
+      onText: ({ text }) => { outlineText = text; const d = $("#o-doc"); if (d) d.innerHTML = md(text); }
+    });
+    outlineText = res.text + (res.truncated ? "\n\n*The outline was cut short. Try a shorter duration or write again.*" : "");
+    log.push({ t: simMin, name: a.name, text: `Wrote a training outline: "${f.topic}" for ${f.client || "a client"}.`, sim: false });
+  } catch (e) {
+    if (e && e.code === "cancelled") outlineText = (e.text || outlineText) + "\n\n*Stopped.*";
+    else outlineText = e && e.code === "not_granted" ? "AI writing isn't allowed for this page. You can turn it on in the artifact's permissions."
+      : e && e.code === "rate_limited" ? "Too many requests right now. Wait a minute and try again." : "Something went wrong reaching AI. Try again.";
+  }
+  outlineBusy = false; outlineCtrl = null;
+  if (view === "agent" && tab === "outline") renderPanel();
+}
+async function saveOutline() {
+  const col = outlinesCol(); if (!col || !outlineText) return;
+  const doc = { client: outlineMeta?.client || "", topic: outlineMeta?.topic || "Untitled", duration: outlineMeta?.duration || "", text: outlineText, createdAt: new Date().toISOString() };
+  try { const ref = await col.add(doc); library.unshift({ id: ref.id, ...doc }); toast("Outline saved"); renderPanel(); }
+  catch (e) { toast("Couldn't save the outline. Try again."); }
+}
+async function downloadOutline() {
+  const name = (outlineMeta?.topic || "training-outline").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "training-outline";
+  try {
+    const dl = window.claude && claude.use ? await claude.use("downloads") : null;
+    if (!dl) { toast("Downloads aren't available here. Use Copy instead."); return; }
+    await dl.save({ filename: name + ".md", data: outlineText });
+  } catch (e) { if (!e || e.code !== "declined") toast("Download didn't start. Use Copy instead."); }
+}
+
+/* Hire / edit form */
+let formColor = null;
+function renderForm(a) {
+  const editing = !!a;
+  const d = a || { name: "", role: "", kind: "custom", description: "", responsibilities: [], tools: [], times: ["09:00"] };
+  formColor = d.color || COLORS.find(c => !agents.some(x => x.color === c)) || COLORS[agents.length % COLORS.length];
+  panel.innerHTML = `
+    <div class="panel-head">
+      <button class="back" type="button" id="back">← ${editing ? "Back to " + esc(a.name) : "All agents"}</button>
+      <h2 style="font-size:18px">${editing ? "Edit " + esc(a.name) : "Hire an agent"}</h2>
+    </div>
+    <div class="panel-body">
+      <form class="grid" id="agent-form">
+        ${editing ? "" : `<div class="field full"><label for="f-kind">Start from</label><select id="f-kind" name="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${k === d.kind ? "selected" : ""}>${esc(v.label)}</option>`).join("")}</select></div>`}
+        <div class="field"><label for="f-name">Name</label><input id="f-name" name="name" required maxlength="24" value="${esc(d.name)}" placeholder="e.g. Sofia"></div>
+        <div class="field"><label for="f-role">Role</label><input id="f-role" name="role" required maxlength="48" value="${esc(d.role)}" placeholder="e.g. Finance Assistant"></div>
+        <div class="field full"><label for="f-desc">What this agent does</label><textarea id="f-desc" name="description" placeholder="One or two sentences">${esc(d.description)}</textarea></div>
+        <div class="field full"><label for="f-resp">Responsibilities (one per line)</label><textarea id="f-resp" name="responsibilities" rows="3">${esc((d.responsibilities || []).join("\n"))}</textarea></div>
+        <div class="field"><label for="f-tools">Tools (comma-separated)</label><input id="f-tools" name="tools" value="${esc((d.tools || []).join(", "))}"></div>
+        <div class="field"><label for="f-times">Run times (24h, comma-separated)</label><input id="f-times" name="times" value="${esc((d.times || []).join(", "))}" placeholder="07:30, 12:30"></div>
+        <div class="field full"><label>Desk colour</label><div class="swatches" id="swatches">${COLORS.map(c => `<button type="button" data-color="${c}" aria-label="Colour ${c}" aria-pressed="${c === formColor}" style="background:${c}"></button>`).join("")}</div></div>
+        <p class="full muted small" id="form-error" role="alert"></p>
+        <div class="full btns"><button class="btn primary" type="submit">${editing ? "Save changes" : "Hire agent"}</button><button class="btn" type="button" id="cancel">Cancel</button></div>
+      </form>
+    </div>`;
+  if (!editing) {
+    $("#f-kind").addEventListener("change", e => {
+      const k = e.target.value, tpl = DEFAULT_AGENTS.find(x => x.kind === k);
+      if (tpl) {
+        $("#f-role").value = tpl.role; $("#f-desc").value = tpl.description;
+        $("#f-resp").value = tpl.responsibilities.join("\n"); $("#f-tools").value = tpl.tools.join(", "); $("#f-times").value = tpl.times.join(", ");
+      }
+    });
+  }
+}
+function submitAgentForm(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const name = String(fd.get("name") || "").trim(), role = String(fd.get("role") || "").trim();
+  const timesRaw = String(fd.get("times") || "").split(/[,\s]+/).filter(Boolean);
+  const bad = timesRaw.filter(t => { const m = toMin(t); return m == null || m >= 1440; });
+  const err = $("#form-error");
+  if (!name || !role) { err.textContent = "Give the agent a name and a role."; return; }
+  if (bad.length) { err.textContent = `These run times aren't valid: ${bad.join(", ")}. Use 24-hour times like 07:30.`; return; }
+  const times = [...new Set(timesRaw.map(t => fmt(toMin(t))))].sort();
+  const fields = {
+    name, role,
+    description: String(fd.get("description") || "").trim() || `${name} helps with ${role.toLowerCase()}.`,
+    responsibilities: String(fd.get("responsibilities") || "").split("\n").map(s => s.trim()).filter(Boolean),
+    tools: String(fd.get("tools") || "").split(",").map(s => s.trim()).filter(Boolean),
+    times, color: formColor
+  };
+  if (view === "edit") {
+    Object.assign(byId(selectedId), fields);
+    view = "agent"; tab = "profile";
+    toast(`${name} updated`);
+  } else {
+    const kind = String(fd.get("kind") || "custom");
+    const a = { id: uid(), kind, skin: SKINS[agents.length % SKINS.length], hair: HAIRS[(agents.length + 2) % HAIRS.length], ...fields };
+    agents.push(a); selectedId = a.id; view = "agent"; tab = "profile";
+    toast(`${name} joined the office`);
+  }
+  save(); rebuildAgents(); renderPanel(); focusAgent(selectedId);
+}
+
+/* Panel events (delegated) */
+panel.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.open) { selectAgent(t.dataset.open); return; }
+  if (t.dataset.tab) { tab = t.dataset.tab; confirmRemove = false; renderPanel(); return; }
+  if (t.dataset.suggest) { const i = $("#chat-input"); if (i) { i.value = t.dataset.suggest; i.focus(); } return; }
+  if (t.dataset.color) { formColor = t.dataset.color; panel.querySelectorAll("#swatches button").forEach(b => b.setAttribute("aria-pressed", b.dataset.color === formColor)); return; }
+  if (t.dataset.lib) { const o = library.find(x => x.id === t.dataset.lib); if (o) { outlineText = o.text; outlineMeta = o; renderPanel(); } return; }
+  switch (t.id) {
+    case "back": if (view === "edit") { view = "agent"; } else { view = "overview"; selectedId = null; } confirmRemove = false; renderPanel(); syncSelection(); break;
+    case "cancel": view = selectedId && byId(selectedId) && view === "edit" ? "agent" : "overview"; if (view === "overview") selectedId = null; renderPanel(); syncSelection(); break;
+    case "hire-btn": view = "hire"; renderPanel(); break;
+    case "edit-btn": view = "edit"; renderPanel(); break;
+    case "remove-btn": confirmRemove = true; renderPanel(); break;
+    case "remove-no": confirmRemove = false; renderPanel(); break;
+    case "remove-yes": {
+      const a = byId(selectedId); agents = agents.filter(x => x.id !== selectedId);
+      confirmRemove = false; selectedId = null; view = "overview"; save(); rebuildAgents(); renderPanel(); toast(`${a ? a.name : "Agent"} removed`); break;
+    }
+    case "o-clear": outlineForm = { client: "", industry: "", topic: "", audience: "", size: "", level: "Beginner", duration: "Full day (7 hours)", format: "In-person", start: "09:00", goals: "", notes: "" }; renderPanel(); break;
+    case "o-stop": outlineCtrl && outlineCtrl.abort(); break;
+    case "o-save": saveOutline(); break;
+    case "o-dl": downloadOutline(); break;
+    case "o-copy": {
+      const done = () => toast("Outline copied");
+      try { navigator.clipboard.writeText(outlineText).then(done, () => selectDoc()); } catch (err) { selectDoc(); }
+      break;
+    }
+  }
+});
+function selectDoc() { const d = $("#o-doc"); if (!d) return; const r = document.createRange(); r.selectNodeContents(d); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("Text selected. Press Ctrl+C or ⌘C to copy."); }
+panel.addEventListener("submit", e => {
+  if (e.target.id === "agent-form") return submitAgentForm(e);
+  e.preventDefault();
+  if (e.target.id === "chat-form") { const i = $("#chat-input"); const v = i.value; i.value = ""; sendChat(v); }
+  if (e.target.id === "outline-form") generateOutline();
+});
+panel.addEventListener("keydown", e => {
+  if (e.target.id === "chat-input" && e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#chat-form").requestSubmit(); }
+});
+panel.addEventListener("input", e => { if (e.target.closest("#outline-form")) readOutlineForm(); });
+
+function selectAgent(id) {
+  selectedId = id; view = "agent"; tab = "profile"; confirmRemove = false;
+  renderPanel(); syncSelection(); focusAgent(id);
+}
+
+/* ---------------- 3D office ---------------- */
+const stage = $("#stage");
+let renderer, scene, camera, controls, sun, hemi, skyMat, wallScreen, agentRoot, raycaster, pointer;
+const labelsEl = $("#labels");
+let camTween = null;
+
+function canvasTex(w, h, draw) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t;
+}
+const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0, ...o });
+function box(w, h, d, m, x = 0, y = 0, z = 0, parent) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); mesh.position.set(x, y, z);
+  mesh.castShadow = true; mesh.receiveShadow = true; if (parent) parent.add(mesh); return mesh;
+}
+function cyl(rt, rb, h, m, x, y, z, parent, seg = 20) {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m); mesh.position.set(x, y, z);
+  mesh.castShadow = true; mesh.receiveShadow = true; if (parent) parent.add(mesh); return mesh;
+}
+
+function initScene() {
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  stage.insertBefore(renderer.domElement, stage.firstChild);
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color("#d9dfdc");
+  scene.fog = new THREE.Fog("#d9dfdc", 45, 80);
+
+  camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
+  const narrow = stage.clientWidth / Math.max(1, stage.clientHeight) < 0.9;
+  camera.position.set(...(narrow ? [2, 21, 15] : [7, 15, 19]));
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(...(narrow ? [-4, 0.5, 1.2] : [-3, 0.5, 1]));
+  controls.enableDamping = true; controls.dampingFactor = 0.08;
+  controls.maxPolarAngle = 1.32; controls.minDistance = 6; controls.maxDistance = 42;
+  controls.update();
+
+  hemi = new THREE.HemisphereLight("#ffffff", "#b9a98f", 0.65); scene.add(hemi);
+  sun = new THREE.DirectionalLight("#fff3e0", 1.5);
+  sun.position.set(6, 14, -16); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 16, bottom: -16, near: 1, far: 60 });
+  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+  scene.add(sun);
+  const fill = new THREE.DirectionalLight("#dfe8ff", 0.35); fill.position.set(-10, 10, 14); scene.add(fill);
+
+  buildRoom();
+  agentRoot = new THREE.Group(); scene.add(agentRoot);
+  rebuildAgents();
+
+  raycaster = new THREE.Raycaster(); pointer = new THREE.Vector2();
+  let down = null;
+  renderer.domElement.addEventListener("pointerdown", e => { down = { x: e.clientX, y: e.clientY }; $("#hint").hidden = true; });
+  renderer.domElement.addEventListener("pointerup", e => {
+    if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return;
+    const r = renderer.domElement.getBoundingClientRect();
+    pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects(agentRoot.children, true)[0];
+    if (hit) { let o = hit.object; while (o && !o.userData.agentId) o = o.parent; if (o) selectAgent(o.userData.agentId); }
+  });
+
+  new ResizeObserver(resize).observe(stage); resize();
+  $("#load-msg").remove();
+  applyDaylight();
+  let last = performance.now();
+  renderer.setAnimationLoop(now => { const dt = Math.min(0.1, (now - last) / 1000); last = now; tick(dt, now / 1000); });
+}
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return;
+  renderer.setSize(w, h, false); camera.aspect = w / h;
+  camera.fov = w / h < 0.9 ? 55 : 40; camera.updateProjectionMatrix();
+}
+
+function buildRoom() {
+  // Floor: light oak planks
+  const floorTex = canvasTex(1024, 1024, (g, w, h) => {
+    g.fillStyle = "#c9a57a"; g.fillRect(0, 0, w, h);
+    const ph = 64;
+    for (let y = 0; y < h; y += ph) {
+      let x = -((y / ph) % 3) * 170;
+      while (x < w) {
+        const len = 300 + Math.random() * 220, l = 62 + Math.random() * 10;
+        g.fillStyle = `hsl(${30 + Math.random() * 5}, ${36 + Math.random() * 8}%, ${l}%)`;
+        g.fillRect(x, y, len, ph);
+        g.strokeStyle = "rgba(90,60,30,0.10)";
+        for (let k = 0; k < 5; k++) { g.beginPath(); const yy = y + 8 + Math.random() * (ph - 16); g.moveTo(x, yy); g.bezierCurveTo(x + len * .3, yy + 3, x + len * .6, yy - 3, x + len, yy); g.stroke(); }
+        g.fillStyle = "rgba(70,45,20,0.35)"; g.fillRect(x, y, 2, ph);
+        x += len;
+      }
+      g.fillStyle = "rgba(70,45,20,0.35)"; g.fillRect(0, y, w, 2);
+    }
+  });
+  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(4, 3);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(28, 18), mat("#ffffff", { map: floorTex, roughness: 0.55 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+  // Base slab edge
+  box(28.4, 0.3, 18.4, mat("#7d7f7c"), 0, -0.16, 0, scene);
+
+  const wallM = mat("#ecebe7", { roughness: 0.9 });
+  const darkM = mat("#2b2f31", { roughness: 0.5, metalness: 0.4 });
+  // Back wall with floor-to-ceiling windows and city view
+  box(28, 0.55, 0.3, wallM, 0, 0.275, -9.15, scene);
+  box(28, 0.5, 0.3, wallM, 0, 3.95, -9.15, scene);
+  const skyTex = canvasTex(2048, 512, (g, w, h) => {
+    const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "#8fbde3"); gr.addColorStop(0.7, "#d6e8f2"); gr.addColorStop(1, "#eef3f2");
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    for (let layer = 0; layer < 2; layer++) {
+      let x = 0;
+      while (x < w) {
+        const bw = 50 + Math.random() * 110, bh = (layer ? 120 : 200) + Math.random() * (layer ? 120 : 200);
+        g.fillStyle = layer ? "#7f95a6" : "#a9bac6"; g.fillRect(x, h - bh, bw, bh);
+        g.fillStyle = layer ? "rgba(230,240,248,0.35)" : "rgba(240,246,250,0.35)";
+        for (let wy = h - bh + 10; wy < h - 6; wy += 14) for (let wx = x + 6; wx < x + bw - 8; wx += 12) if (Math.random() > 0.35) g.fillRect(wx, wy, 6, 7);
+        x += bw + (layer ? 4 : 18);
+      }
+    }
+  });
+  skyMat = new THREE.MeshBasicMaterial({ map: skyTex, toneMapped: false });
+  const sky = new THREE.Mesh(new THREE.PlaneGeometry(28, 3.4), skyMat); sky.position.set(0, 2.25, -9.3); scene.add(sky);
+  const glassM = new THREE.MeshStandardMaterial({ color: "#cfe3ee", transparent: true, opacity: 0.12, roughness: 0.05, metalness: 0.2, depthWrite: false });
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(28, 3.4), glassM); glass.position.set(0, 2.25, -9.05); scene.add(glass);
+  for (let x = -14; x <= 14; x += 3.5) box(0.08, 3.4, 0.12, darkM, x, 2.25, -9.05, scene);
+  box(28, 0.06, 0.14, darkM, 0, 0.58, -9.05, scene);
+
+  // Left wall with display
+  box(0.3, 4.2, 18, wallM, -14.15, 2.1, 0, scene);
+  const screenFrame = box(0.12, 2.9, 5.1, darkM, -13.94, 2.2, 0.5, scene);
+  screenFrame.castShadow = false;
+  const wc = document.createElement("canvas"); wc.width = 1024; wc.height = 580;
+  const wtex = new THREE.CanvasTexture(wc); wtex.encoding = THREE.sRGBEncoding;
+  const ws = new THREE.Mesh(new THREE.PlaneGeometry(4.9, 2.75), new THREE.MeshBasicMaterial({ map: wtex, toneMapped: false }));
+  ws.rotation.y = Math.PI / 2; ws.position.set(-13.87, 2.2, 0.5); scene.add(ws);
+  wallScreen = { canvas: wc, tex: wtex, lastKey: "" };
+  // Long credenza under the screen
+  box(0.6, 0.7, 6, mat("#3d4144", { roughness: 0.6 }), -13.65, 0.35, 0.5, scene);
+
+  // Meeting room (glass), back-right
+  const mr = new THREE.Group(); mr.position.set(10.5, 0, -5.5); scene.add(mr);
+  const pane = new THREE.MeshStandardMaterial({ color: "#d7ebf3", transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.1, depthWrite: false, side: THREE.DoubleSide });
+  const p1 = new THREE.Mesh(new THREE.PlaneGeometry(7, 3.6), pane); p1.position.set(0, 1.8, 3.5); mr.add(p1);
+  const p2 = new THREE.Mesh(new THREE.PlaneGeometry(7, 3.6), pane); p2.rotation.y = Math.PI / 2; p2.position.set(-3.5, 1.8, 0); mr.add(p2);
+  box(7, 0.06, 0.06, darkM, 0, 3.6, 3.5, mr); box(0.06, 0.06, 7, darkM, -3.5, 3.6, 0, mr);
+  box(0.06, 3.6, 0.06, darkM, -3.5, 1.8, 3.5, mr);
+  box(4, 0.08, 1.7, mat("#5a4030", { roughness: 0.5 }), 0.3, 0.76, 0, mr);
+  cyl(0.08, 0.12, 0.72, darkM, -1.2, 0.36, 0, mr); cyl(0.08, 0.12, 0.72, darkM, 1.8, 0.36, 0, mr);
+  for (let i = 0; i < 3; i++) for (const s of [-1, 1]) meetingChair(mr, -1 + i * 1.3, s * 1.25, s > 0 ? Math.PI : 0);
+  box(0.06, 1.4, 2.4, darkM, 3.35, 1.8, 0, mr);
+  const mrScreen = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 1.3), new THREE.MeshBasicMaterial({ color: "#26343c" }));
+  mrScreen.rotation.y = -Math.PI / 2; mrScreen.position.set(3.31, 1.8, 0); mr.add(mrScreen);
+
+  // Lounge, front-right: rug, sofa, coffee table, coffee bar
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 4), mat("#8c9a92", { roughness: 1 })); rug.rotation.x = -Math.PI / 2; rug.position.set(10.2, 0.01, 4.4); rug.receiveShadow = true; scene.add(rug);
+  const sofaM = mat("#46566a", { roughness: 0.95 });
+  box(3.6, 0.45, 1.1, sofaM, 10.2, 0.3, 6.3, scene); box(3.6, 0.7, 0.3, sofaM, 10.2, 0.75, 6.85, scene);
+  box(0.3, 0.6, 1.1, sofaM, 8.25, 0.45, 6.3, scene); box(0.3, 0.6, 1.1, sofaM, 12.15, 0.45, 6.3, scene);
+  box(1.6, 0.06, 0.9, mat("#d9cfc0", { roughness: 0.4 }), 10.2, 0.42, 4.4, scene);
+  cyl(0.05, 0.05, 0.4, darkM, 9.6, 0.2, 4.4, scene); cyl(0.05, 0.05, 0.4, darkM, 10.8, 0.2, 4.4, scene);
+  box(0.8, 1.0, 4.2, mat("#f2f1ee", { roughness: 0.4 }), 13.4, 0.5, 4.4, scene);
+  box(0.84, 0.05, 4.24, mat("#6b5a4a", { roughness: 0.4 }), 13.4, 1.02, 4.4, scene);
+  box(0.4, 0.45, 0.35, mat("#b9bcbd", { metalness: 0.7, roughness: 0.3 }), 13.4, 1.27, 3.3, scene);
+  for (let i = 0; i < 3; i++) cyl(0.05, 0.04, 0.1, mat("#ffffff", { roughness: 0.3 }), 13.35, 1.1, 4.4 + i * 0.25, scene, 12);
+
+  // Plants
+  [[-13, -8], [6.4, -8.2], [-13, 8], [6.2, 8], [7.6, 1.5], [-6.6, -8.2]].forEach(([x, z], i) => plant(x, z, i % 2 ? 1.2 : 1.6));
+
+}
+
+function meetingChair(parent, x, z, rot) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot; parent.add(g);
+  const m = mat("#2e3436", { roughness: 0.8 });
+  box(0.5, 0.08, 0.5, m, 0, 0.48, 0, g); box(0.5, 0.5, 0.06, m, 0, 0.78, 0.24, g); cyl(0.03, 0.03, 0.44, m, 0, 0.24, 0, g, 8);
+}
+function plant(x, z, s) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s); scene.add(g);
+  cyl(0.28, 0.22, 0.55, mat("#e8e4dc", { roughness: 0.6 }), 0, 0.275, 0, g);
+  const leafM = mat("#3f7a45", { roughness: 0.8 });
+  for (let i = 0; i < 7; i++) {
+    const l = new THREE.Mesh(new THREE.IcosahedronGeometry(0.25 + Math.random() * 0.12, 1), leafM);
+    const a = i / 7 * Math.PI * 2; l.position.set(Math.cos(a) * 0.2, 0.75 + Math.random() * 0.5, Math.sin(a) * 0.2);
+    l.scale.set(1, 1.4, 1); l.castShadow = true; g.add(l);
+  }
+}
+
+function drawScreen(rt, a, working, prog) {
+  const c = rt.screenCanvas, g = c.getContext("2d"), w = c.width, h = c.height;
+  g.fillStyle = working ? "#0f2a2a" : "#151b22"; g.fillRect(0, 0, w, h);
+  g.fillStyle = a.color; g.fillRect(0, 0, w, 18);
+  g.fillStyle = "#e9f0ee"; g.font = "600 22px Inter, sans-serif"; g.fillText(a.name, 14, 50);
+  g.fillStyle = "#93a5a0"; g.font = "15px Inter, sans-serif"; g.fillText(a.role.slice(0, 26), 14, 74);
+  if (working) {
+    g.fillStyle = "#e3a446"; g.font = "600 15px Inter, sans-serif"; g.fillText("Working…", 14, 104);
+    for (let i = 0; i < 4; i++) { g.fillStyle = "rgba(255,255,255,0.12)"; g.fillRect(14, 116 + i * 9, w - 28, 5); g.fillStyle = a.color; g.fillRect(14, 116 + i * 9, (w - 28) * Math.min(1, Math.max(0, prog * 1.4 - i * 0.18)), 5); }
+  } else {
+    const n = nextRun(a);
+    g.fillStyle = "#93a5a0"; g.font = "15px Inter, sans-serif"; g.fillText(n != null ? "Next run " + fmt(n) : "Done for today", 14, 110);
+  }
+  rt.screenTex.needsUpdate = true;
+}
+
+function buildAgent(a, slot) {
+  const [x, z] = SLOTS[slot];
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.userData.agentId = a.id; agentRoot.add(g);
+  const color = new THREE.Color(a.color);
+  // Desk
+  const topM = mat("#f4f3f0", { roughness: 0.35 }), legM = mat("#2b2f31", { roughness: 0.45, metalness: 0.5 });
+  box(2.4, 0.06, 1.2, topM, 0, 0.75, 0, g);
+  for (const sx of [-1.1, 1.1]) { box(0.06, 0.72, 1.0, legM, sx, 0.36, 0, g); }
+  box(2.2, 0.35, 0.03, mat("#e2e0db"), 0, 0.5, -0.45, g); // modesty panel
+  // Monitor
+  box(0.1, 0.32, 0.06, legM, 0, 0.95, -0.38, g);
+  box(0.36, 0.02, 0.2, legM, 0, 0.79, -0.38, g);
+  box(1.1, 0.64, 0.04, mat("#1b1e21", { roughness: 0.4 }), 0, 1.38, -0.42, g);
+  const sc = document.createElement("canvas"); sc.width = 320; sc.height = 180;
+  const st = new THREE.CanvasTexture(sc); st.encoding = THREE.sRGBEncoding;
+  const screenM = new THREE.MeshBasicMaterial({ map: st, toneMapped: false });
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.04, 0.58), screenM); screen.position.set(0, 1.38, -0.395); g.add(screen);
+  // Keyboard, mug, notebook
+  box(0.55, 0.02, 0.18, mat("#d8d8d6"), 0, 0.79, 0.05, g);
+  cyl(0.05, 0.045, 0.11, mat(a.color, { roughness: 0.4 }), 0.75, 0.835, -0.05, g, 14);
+  box(0.3, 0.02, 0.4, mat("#30363a"), -0.75, 0.79, 0.05, g).rotation.y = 0.2;
+  // Small desk plant
+  cyl(0.07, 0.06, 0.12, mat("#ffffff"), -0.95, 0.84, -0.35, g, 12);
+  const sp = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 1), mat("#4d8a52")); sp.position.set(-0.95, 0.97, -0.35); g.add(sp);
+  // Glow disk (status)
+  const glowM = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.0, depthWrite: false });
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(1.0, 40), glowM); glow.rotation.x = -Math.PI / 2; glow.position.set(0, 0.015, 0.85); g.add(glow);
+
+  // Chair + person (swivel group). Person faces -z (towards monitor).
+  const chair = new THREE.Group(); chair.position.set(0, 0, 0.85); g.add(chair);
+  const chairM = mat("#2f3538", { roughness: 0.85 });
+  cyl(0.04, 0.04, 0.42, legM, 0, 0.24, 0, chair, 10);
+  for (let i = 0; i < 5; i++) { const leg = box(0.34, 0.03, 0.05, legM, 0, 0.04, 0, chair); leg.rotation.y = i / 5 * Math.PI * 2; leg.translateX(0.17); }
+  box(0.56, 0.08, 0.52, chairM, 0, 0.48, 0, chair);
+  box(0.54, 0.62, 0.07, chairM, 0, 0.88, 0.27, chair);
+
+  const skin = mat(a.skin || SKINS[0], { roughness: 0.6 });
+  const shirt = mat(a.color, { roughness: 0.8 });
+  const pants = mat("#2c3036", { roughness: 0.85 });
+  const person = new THREE.Group(); chair.add(person);
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.32, 6, 14), shirt); torso.position.set(0, 0.9, 0.06); torso.castShadow = true; person.add(torso);
+  const head = new THREE.Group(); head.position.set(0, 1.33, 0.04); person.add(head);
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.15, 24, 18), skin); skull.scale.set(1, 1.1, 1); skull.castShadow = true; head.add(skull);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.158, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.55), mat(a.hair || HAIRS[0], { roughness: 0.9 }));
+  hair.position.set(0, 0.02, 0.012); hair.rotation.x = 0.25; head.add(hair);
+  const neck = cyl(0.06, 0.06, 0.1, skin, 0, 1.2, 0.05, person, 10);
+  for (const sx of [-0.1, 0.1]) {
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.34, 4, 10), pants); thigh.rotation.x = Math.PI / 2; thigh.position.set(sx, 0.6, -0.15); thigh.castShadow = true; person.add(thigh);
+    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.065, 0.36, 4, 10), pants); shin.position.set(sx, 0.32, -0.38); shin.castShadow = true; person.add(shin);
+    box(0.11, 0.07, 0.22, mat("#1d1f22"), sx, 0.05, -0.45, person);
+  }
+  const arms = [];
+  for (const sx of [-1, 1]) {
+    const pivot = new THREE.Group(); pivot.position.set(sx * 0.25, 1.1, 0.05); person.add(pivot);
+    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.26, 4, 10), shirt); upper.position.set(0, -0.16, 0); upper.castShadow = true; pivot.add(upper);
+    const elbow = new THREE.Group(); elbow.position.set(0, -0.3, 0); pivot.add(elbow);
+    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.26, 4, 10), skin); fore.rotation.x = Math.PI / 2; fore.position.set(0, 0, -0.16); fore.castShadow = true; elbow.add(fore);
+    pivot.rotation.x = 0.35; pivot.rotation.z = sx * 0.12; elbow.rotation.y = -sx * 0.25;
+    arms.push(pivot);
+  }
+
+  const label = document.createElement("button");
+  label.type = "button"; label.className = "tag"; label.addEventListener("click", () => selectAgent(a.id));
+  labelsEl.appendChild(label);
+
+  const rt = runtime[a.id] = { g, chair, head, arms, glow, screenCanvas: sc, screenTex: st, label, lastScreen: "", swivel: 0, phase: Math.random() * 6 };
+  drawScreen(rt, a, false, 0);
+  return rt;
+}
+
+function rebuildAgents() {
+  if (!agentRoot) return;
+  for (const id in runtime) { runtime[id].label.remove(); delete runtime[id]; }
+  while (agentRoot.children.length) {
+    const c = agentRoot.children.pop();
+    c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+  }
+  agents.forEach((a, i) => buildAgent(a, i));
+  syncSelection();
+}
+function syncSelection() {
+  for (const a of agents) { const rt = runtime[a.id]; if (rt) rt.label.classList.toggle("selected", a.id === selectedId && view !== "overview"); }
+}
+
+function focusAgent(id) {
+  const rt = runtime[id]; if (!rt || !camera) return;
+  const target = rt.g.position.clone().add(new THREE.Vector3(0, 0.9, 0.6));
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  const dist = Math.max(7, Math.min(11, camera.position.distanceTo(controls.target)));
+  const toPos = target.clone().add(dir.multiplyScalar(dist));
+  toPos.y = Math.max(toPos.y, 4.5);
+  if (RM) { controls.target.copy(target); camera.position.copy(toPos); return; }
+  camTween = { t: 0, fromT: controls.target.clone(), toT: target, fromP: camera.position.clone(), toP: toPos };
+}
+
+function drawWallScreen() {
+  const key = Math.floor(simMin / 5) + "|" + agents.map(a => a.id + isWorking(a)).join();
+  if (key === wallScreen.lastKey) return; wallScreen.lastKey = key;
+  const g = wallScreen.canvas.getContext("2d"), w = 1024, h = 580;
+  g.fillStyle = "#121a1f"; g.fillRect(0, 0, w, h);
+  g.fillStyle = "#6fc3ad"; g.font = "600 26px Inter, sans-serif"; g.fillText("TODAY'S RUN", 48, 66);
+  g.fillStyle = "#f2f5f4"; g.font = "600 120px 'JetBrains Mono', monospace"; g.fillText(fmt(simMin), 44, 196);
+  const working = agents.filter(isWorking);
+  g.fillStyle = "#93a5a0"; g.font = "26px Inter, sans-serif";
+  g.fillText(working.length ? "Working now: " + working.map(a => a.name).join(", ") : (playing ? "Team on standby" : "Press Run my day"), 48, 250);
+  const up = agents.flatMap(a => sortedTimes(a).filter(t => t >= simMin).map(t => ({ a, t }))).sort((x, y) => x.t - y.t).slice(0, 5);
+  g.font = "28px Inter, sans-serif";
+  up.forEach((u, i) => {
+    const y = 320 + i * 48;
+    g.fillStyle = u.a.color; g.fillRect(48, y - 22, 10, 28);
+    g.fillStyle = "#f2f5f4"; g.font = "28px 'JetBrains Mono', monospace"; g.fillText(fmt(u.t), 74, y);
+    g.font = "28px Inter, sans-serif"; g.fillStyle = "#c9d4d0"; g.fillText(u.a.name + " · " + u.a.role, 200, y);
+  });
+  // progress bar
+  const p = (simMin - DAY_START) / (DAY_END - DAY_START);
+  g.fillStyle = "#26323a"; g.fillRect(48, h - 40, w - 96, 8); g.fillStyle = "#6fc3ad"; g.fillRect(48, h - 40, (w - 96) * p, 8);
+  wallScreen.tex.needsUpdate = true;
+}
+
+const C_MORN = new THREE.Color("#ffd9b0"), C_NOON = new THREE.Color("#fff6ea"), C_EVE = new THREE.Color("#ff9d66");
+const SKY_MORN = new THREE.Color("#ffe6cc"), SKY_NOON = new THREE.Color("#ffffff"), SKY_EVE = new THREE.Color("#ffb488");
+function applyDaylight() {
+  if (!sun) return;
+  const p = (simMin - DAY_START) / (DAY_END - DAY_START); // 0..1
+  const ang = -0.9 + p * 1.8;
+  sun.position.set(Math.sin(ang) * 16, 8 + Math.cos(ang) * 8, -16);
+  const c = p < 0.5 ? C_MORN.clone().lerp(C_NOON, p * 2) : C_NOON.clone().lerp(C_EVE, (p - 0.5) * 2);
+  sun.color.copy(c); sun.intensity = 0.9 + Math.sin(p * Math.PI) * 0.8;
+  hemi.intensity = 0.5 + Math.sin(p * Math.PI) * 0.25;
+  skyMat.color.copy(p < 0.5 ? SKY_MORN.clone().lerp(SKY_NOON, p * 2) : SKY_NOON.clone().lerp(SKY_EVE, (p - 0.5) * 2));
+}
+
+/* ---------------- Simulation ---------------- */
+function resultFor(a, idx) {
+  const k = KINDS[a.kind] || KINDS.custom;
+  if (k.results.length) return k.results[idx % k.results.length];
+  const r = (a.responsibilities || [])[idx % Math.max(1, (a.responsibilities || []).length)];
+  return r ? `Finished the scheduled run: ${r.charAt(0).toLowerCase() + r.slice(1)}.` : "Finished the scheduled run.";
+}
+function stepSim(prev, now) {
+  let changed = false;
+  for (const a of agents) {
+    sortedTimes(a).forEach((t, idx) => {
+      const key = a.id + "@" + t;
+      if (!fired.has(key) && prev < t + 0.0001 && now >= t) { fired.add(key); changed = true; }
+      const doneKey = key + "#done";
+      if (fired.has(key) && !fired.has(doneKey) && now >= t + WORK_MIN) {
+        fired.add(doneKey); changed = true;
+        log.push({ t: t + WORK_MIN, name: a.name, text: resultFor(a, idx), sim: true });
+      }
+    });
+  }
+  return changed;
+}
+function setClock(m, fromScrub) {
+  const prev = simMin; simMin = Math.max(DAY_START, Math.min(DAY_END, m));
+  if (simMin < prev) {
+    // Rewind: forget runs after the new time and their log lines.
+    for (const k of [...fired]) { const t = +k.split("@")[1].split("#")[0]; if (t >= simMin || (k.endsWith("#done") && t + WORK_MIN > simMin)) fired.delete(k); }
+    for (let i = log.length - 1; i >= 0; i--) if (log[i].sim && log[i].t > simMin) log.splice(i, 1);
+    if (fromScrub) { for (const a of agents) sortedTimes(a).forEach(t => { if (t <= simMin && t + WORK_MIN > simMin) fired.add(a.id + "@" + t); }); }
+  } else if (fromScrub) {
+    stepSim(prev, simMin);
+  }
+  $("#clock").textContent = fmt(simMin);
+  $("#scrub").value = String(Math.round(simMin));
+  applyDaylight();
+}
+let panelDirty = false, lastPanelRefresh = 0;
+function togglePlay(force) {
+  playing = typeof force === "boolean" ? force : !playing;
+  if (playing && simMin >= DAY_END) { setClock(DAY_START); }
+  $("#play span").textContent = playing ? "Pause" : (simMin > DAY_START && simMin < DAY_END ? "Resume" : "Run my day");
+  $("#play svg").innerHTML = playing ? '<path d="M4 2.5h3v11H4zM9 2.5h3v11H9z"/>' : '<path d="M4 2.5v11l9-5.5z"/>';
+}
+$("#play").addEventListener("click", () => togglePlay());
+$("#scrub").addEventListener("input", e => { setClock(+e.target.value, true); panelDirty = true; });
+
+function tick(dt, t) {
+  if (playing) {
+    const prev = simMin;
+    const next = Math.min(DAY_END, simMin + dt * (+$("#speed").value));
+    simMin = next;
+    if (stepSim(prev, next)) panelDirty = true;
+    $("#clock").textContent = fmt(simMin); $("#scrub").value = String(Math.round(simMin));
+    applyDaylight();
+    if (simMin >= DAY_END) {
+      togglePlay(false);
+      log.push({ t: DAY_END, name: "Office", text: `Day complete. ${log.filter(l => l.sim).length} agent runs finished.`, sim: true });
+      panelDirty = true;
+    }
+  }
+  if (camTween) {
+    camTween.t = Math.min(1, camTween.t + dt * 1.6);
+    const e = 1 - Math.pow(1 - camTween.t, 3);
+    controls.target.lerpVectors(camTween.fromT, camTween.toT, e);
+    camera.position.lerpVectors(camTween.fromP, camTween.toP, e);
+    if (camTween.t >= 1) camTween = null;
+  }
+  controls.update();
+
+  const rect = stage.getBoundingClientRect();
+  const v = new THREE.Vector3();
+  for (const a of agents) {
+    const rt = runtime[a.id]; if (!rt) continue;
+    const working = isWorking(a);
+    const selected = a.id === selectedId && view !== "overview";
+    // Swivel to face the camera when selected and idle
+    const target = selected && !working ? Math.PI : 0;
+    rt.swivel += (target - rt.swivel) * Math.min(1, dt * (RM ? 30 : 4));
+    rt.chair.rotation.y = rt.swivel;
+    // Typing / idle motion
+    if (!RM) {
+      const s = working ? 14 : 1.2;
+      rt.arms[0].rotation.x = 0.35 + (working ? Math.sin(t * s + rt.phase) * 0.06 : 0);
+      rt.arms[1].rotation.x = 0.35 + (working ? Math.sin(t * s + rt.phase + 1.7) * 0.06 : 0);
+      rt.head.rotation.x = working ? 0.08 + Math.sin(t * 2 + rt.phase) * 0.03 : Math.sin(t * 0.6 + rt.phase) * 0.04;
+      rt.head.rotation.y = working ? 0 : Math.sin(t * 0.35 + rt.phase) * 0.25;
+    }
+    rt.glow.material.opacity += ((working ? 0.35 + (RM ? 0 : Math.sin(t * 4) * 0.1) : selected ? 0.22 : 0) - rt.glow.material.opacity) * Math.min(1, dt * 6);
+    // Screen
+    const tm = sortedTimes(a).find(x => simMin >= x && simMin < x + WORK_MIN);
+    const prog = working && tm != null ? (simMin - tm) / WORK_MIN : 0;
+    const sk = working ? "w" + Math.floor(prog * 20) : "i" + nextRun(a);
+    if (sk !== rt.lastScreen) { rt.lastScreen = sk; drawScreen(rt, a, working, prog); }
+    // Label
+    v.set(0, 1.85, 0.85); rt.g.localToWorld(v); v.project(camera);
+    const vis = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
+    rt.label.hidden = !vis;
+    if (vis) {
+      rt.label.style.transform = `translate(${((v.x + 1) / 2 * rect.width).toFixed(1)}px, ${((1 - v.y) / 2 * rect.height).toFixed(1)}px) translate(-50%, -100%)`;
+      const html = `<i class="dot"></i>${esc(a.name)} <small>${working ? "working" : esc(a.role.split(" ")[0])}</small>`;
+      if (rt.label._html !== html) { rt.label.innerHTML = html; rt.label._html = html; rt.label.setAttribute("aria-label", `${a.name}, ${a.role}${working ? ", working" : ""}`); }
+      rt.label.classList.toggle("working", working);
+    }
+  }
+  drawWallScreen();
+  renderer.render(scene, camera);
+
+  // Refresh panel occasionally while time moves (not while the user is typing in a form)
+  const now = performance.now();
+  if (panelDirty && now - lastPanelRefresh > 400) {
+    const typing = document.activeElement && panel.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+    const safe = view === "overview" || (view === "agent" && tab === "profile");
+    if (safe && !typing) { renderPanel(); }
+    panelDirty = false; lastPanelRefresh = now;
+  }
+  if (playing && now - lastPanelRefresh > 1500 && view === "overview") panelDirty = true;
+}
+
+/* ---------------- Boot ---------------- */
+(async function boot() {
+  await loadState();
+  renderPanel();
+  if (typeof THREE === "undefined" || !THREE.OrbitControls) {
+    const m = $("#load-msg"); if (m) m.textContent = "The 3D view couldn't load. Your agents still work in the panel.";
+    return;
+  }
+  try { initScene(); }
+  catch (e) { const m = $("#load-msg"); if (m) m.textContent = "Your device couldn't start the 3D view. Your agents still work in the panel."; }
+})();
+})();
+</script>
